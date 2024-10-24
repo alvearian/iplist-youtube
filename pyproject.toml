@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "iplist-youtube"
-version = "0.1.0"
+version = "0.2.0"
 description = "An attempt to list all Youtube IPs at one place."
 authors = ["Md. Touhidur Rahman <touhidurrr@pm.me>"]
 license = "BSD-3-Clause"
@@ -11,6 +11,13 @@ python = "^3.12"
 cryptography = "^43.0.3"
 dnspython = "^2.7.0"
 pyyaml = "^6.0.2"
+
+[tool.autopep8]
+in-place = true
+recursive = true
+indent-size = 2
+line-width = 100
+ignore = "E121"
 
 
 [build-system]

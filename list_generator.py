@@ -6,7 +6,12 @@ from urllib.request import urlretrieve as download
 
 from dns import asyncresolver
 
-type IPList = list[IPv4Address | IPv6Address]
+type IP = IPv4Address | IPv6Address
+type IPList = list[IP]
+
+
+def isGlobalIP(ip: IP) -> bool:
+  return ip.is_global
 
 
 def get_ip_fetcher():
@@ -45,18 +50,25 @@ def get_ip_fetcher():
     print(domain, 'IN', query, ips)
 
     # append the ips for listing
-    ipList += ips
+    ipList += list(filter(isGlobalIP, ips))
 
   return ip_fetcher
 
 
-def read_ips(ipv4List: list[IPv4Address], ipv6List: list[IPv6Address]):
+def read_ips(
+  ipv4List: list[IPv4Address] = [],
+  ipv6List: list[IPv6Address] = []
+) -> tuple[list[IPv4Address], list[IPv6Address]]:
+  ipv4Set: set[IPv4Address] = set(ipv4List)
+  ipv6Set: set[IPv6Address] = set(ipv6List)
+
   with open('ipv4_list.txt', mode='r', encoding='utf-8') as f:
     for ip in f.readlines():
       ip = ip.strip()
       try:
         ip = ip_address(ip)
-        ipv4List.append(ip)
+        if ip.is_global:
+          ipv4Set.add(ip)
       except ValueError:
         if ip != '':
           print('%s is not a valid IPv4 address!' % ip)
@@ -66,14 +78,13 @@ def read_ips(ipv4List: list[IPv4Address], ipv6List: list[IPv6Address]):
       ip = ip.strip()
       try:
         ip = ip_address(ip)
-        ipv6List.append(ip)
+        if ip.is_global:
+          ipv6Set.add(ip)
       except ValueError:
         if ip != '':
           print('%s is not a valid IPv6 address!' % ip)
 
-  # de-duplicate list entries
-  ipv4List = list(set(ipv4List))
-  ipv6List = list(set(ipv6List))
+  return (list(ipv4Set), list(ipv6Set))
 
 # download youtubeparsed
 
@@ -83,7 +94,10 @@ def download_youtubeparsed():
   download(url, 'youtubeparsed')
 
 
-def get_coroutines(ipv4List: list[IPv4Address], ipv6List: list[IPv6Address], ip_fetcher):
+def get_coroutines(
+  ipv4List: list[IPv4Address],
+  ipv6List: list[IPv6Address],
+        ip_fetcher):
   # make a list of threads
   coroutines = []
 
@@ -112,20 +126,9 @@ def get_coroutines(ipv4List: list[IPv4Address], ipv6List: list[IPv6Address], ip_
 
 
 def write_ips(ipv4List: list[IPv4Address], ipv6List: list[IPv6Address]):
-  # convert to set to de-duplicate list entries
-  ipv4Set = set(ipv4List)
-  ipv6Set = set(ipv6List)
-
-  # remove null ips
-  ipv4Set.discard(ip_address('0.0.0.0'))
-  ipv6Set.discard(ip_address('::'))
-  ipv6Set.discard(ip_address('::1'))
-  ipv6Set.discard(ip_address('::ffff:0:0'))
-  ipv6Set.discard(ip_address('::ffff:7f00:1'))
-
-  # convert back to list
-  ipv4List = list(ipv4Set)
-  ipv6List = list(ipv6Set)
+  # filter non-global ips
+  ipv4List = list(filter(isGlobalIP, ipv4List))
+  ipv6List = list(filter(isGlobalIP, ipv6List))
 
   # sort ips before writing
   ipv4List.sort()
@@ -142,11 +145,7 @@ def write_ips(ipv4List: list[IPv4Address], ipv6List: list[IPv6Address]):
 
 async def main():
   # make a list of ips
-  ipv4List: list[IPv4Address] = []
-  ipv6List: list[IPv6Address] = []
-
-  # read previous ips
-  read_ips(ipv4List, ipv6List)
+  ipv4List, ipv6List = read_ips()
 
   # count and remember the number of previous entries
   previousIpv4s = len(ipv4List)
@@ -175,7 +174,7 @@ async def main():
   print('Number of new ipv6 addresses found:', len(ipv6List) - previousIpv6s)
 
   # read ips again (resolves some errors)
-  read_ips(ipv4List, ipv6List)
+  ipv4List, ipv6List = read_ips(ipv4List, ipv6List)
 
   # now write the ips in files
   write_ips(ipv4List, ipv6List)
